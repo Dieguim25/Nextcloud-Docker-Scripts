@@ -1,0 +1,55 @@
+services:
+  db:
+    image: mariadb:10.6
+    container_name: ${CONTAINER_NAME}-db
+    restart: always
+    command: --transaction-isolation=READ-COMMITTED --binlog-format=ROW
+    volumes:
+      - db:/var/lib/mysql
+    environment:
+      - MYSQL_ROOT_PASSWORD=${DB_ROOT_PASSWORD}
+      - MYSQL_DATABASE=${DB_NAME}
+      - MYSQL_USER=${DB_USER}
+      - MYSQL_PASSWORD=${DB_PASSWORD}
+      - TZ=${TZ}
+
+  redis:
+    image: redis:alpine
+    container_name: ${CONTAINER_NAME}-redis
+    restart: always
+    command: redis-server --requirepass ${REDIS_PASSWORD}
+    volumes:
+      - redis:/data
+
+  app:
+    image: nextcloud:latest
+    user: root
+    container_name: ${CONTAINER_NAME}-app
+    restart: always
+    depends_on:
+      - db
+      - redis
+    ports:
+      - ${NEXTCLOUD_PORT}:80
+    environment:
+      - MYSQL_HOST=db
+      - MYSQL_DATABASE=${DB_NAME}
+      - MYSQL_USER=${DB_USER}
+      - MYSQL_PASSWORD=${DB_PASSWORD}
+      - REDIS_HOST=redis
+      - REDIS_HOST_PASSWORD=${REDIS_PASSWORD}
+      - NEXTCLOUD_ADMIN_USER=${NC_USER}
+      - NEXTCLOUD_ADMIN_PASSWORD=${NC_PASS}
+      - TZ=${TZ}
+      - PHP_MEMORY_LIMIT=1024M
+      - PHP_UPLOAD_LIMIT=15360M
+    volumes:
+      - app:/var/www/html/config
+      - ${NC_DATA}:/var/www/html/data
+volumes:
+  db:
+    name: ${CONTAINER_NAME}-db
+  redis:
+    name: ${CONTAINER_NAME}-redis
+  app:
+    name: ${CONTAINER_NAME}-app

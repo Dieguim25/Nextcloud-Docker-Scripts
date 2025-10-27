@@ -1,5 +1,13 @@
 #!/bin/bash
 
+# --- Início da Verificação de Root ---
+if [ "$UID" -ne 0 ]; then
+  echo "Erro: Este script precisa ser executado com privilégios de root." >&2
+  echo "Por favor, execute com 'sudo'." >&2
+  exit 1
+fi
+# --- Fim da Verificação de Root ---
+
 # Cores
 GREEN='\033[0;32m'
 RED='\033[0;31m'
@@ -10,30 +18,19 @@ NC='\033[0m' # Sem cor
 CONFIG_PATH="/var/www/html/config/config.php"
 ENV_FILE=".env"
 
-# Verifica se o arquivo .env existe
-if [ ! -f "$ENV_FILE" ]; then
-  echo -e "${RED}❌ Arquivo .env não encontrado no diretório atual.${NC}"
-  exit 1
+# Se o .env não estiver aqui, encerra.
+if [ ! -f .env ]; then
+    echo -e "${RED}Erro: Arquivo .env não encontrado no diretório atual.${NC}"
+    echo "Execute este script de dentro da pasta de configuração desse container."
+    exit 1
 fi
 
-# Carrega variáveis do .env
-echo -e "${YELLOW}📦 Carregando variáveis do arquivo .env...${NC}"
-LOCAL=$(grep '^LOCAL=' "$ENV_FILE" | cut -d '=' -f2)
-TZ=$(grep '^TZ=' "$ENV_FILE" | cut -d '=' -f2)
-NEXTCLOUD_PORT=$(grep '^NEXTCLOUD_PORT=' "$ENV_FILE" | cut -d '=' -f2)
-NC_USER=$(grep '^NC_USER=' "$ENV_FILE" | cut -d '=' -f2)
-NC_PASS=$(grep '^NC_PASS=' "$ENV_FILE" | cut -d '=' -f2)
-CONTAINER_NAME=$(grep '^CONTAINER_NAME=' "$ENV_FILE" | cut -d '=' -f2)
-
+# 2. Carrega as variáveis (como $CONTAINER_NAME) do arquivo .env
+echo -e "${GREEN}Carregando configuração...${NC}"
+export $(grep -v '^#' .env | xargs)
 
 # Captura o IP local
 IP_LOCAL=$(hostname -I | awk '{print $1}')
-
-# Verifica se as variáveis foram carregadas
-if [ -z "$LOCAL" ] || [ -z "$TZ" ]; then
-  echo -e "${RED}❌ Variáveis LOCAL ou TZ não encontradas ou estão vazias no .env.${NC}"
-  exit 1
-fi
 
 # Função para executar comandos OCC com verificação
 executar_occ() {
@@ -89,19 +86,12 @@ executar_occ "Adicionando IP local aos domínios confiáveis" config:system:set 
 executar_occ "Desativando app_api" app:disable app_api
 
 
-echo -e "${CYAN}Renomeando o arquivo .env${NC}"
-# Renomeia o arquivo .env com base no nome do container e data
-DATA_ATUAL=$(date +%Y%m%d-%H%M%S)
-NOVO_ENV=".env_${CONTAINER_NAME}_${DATA_ATUAL}"
-
-mv "$ENV_FILE" "$NOVO_ENV"
-
 echo -e "${CYAN}Informações de credenciais podem ser encontradas no arquivo $NOVO_ENV${NC}"
 sleep 3
 
-
 # Define o nome completo do container para reinício
 APP_CONTAINER="${CONTAINER_NAME}-app"
+
 
 echo -e "${YELLOW}🔄 Reiniciando o container '$APP_CONTAINER' para aplicar as configurações...${NC}"
 docker restart "$APP_CONTAINER"
@@ -112,6 +102,23 @@ else
   exit 1
 fi
 
-# Exibe mensagem interativa via SSH com whiptail
-whiptail --title "Nextcloud está pronto!" \
-  --msgbox "O Nextcloud está funcional!\n\nAcesse pelo navegador:\n\nhttp://${IP_LOCAL}:${NEXTCLOUD_PORT}\nUsuário: ${NC_USER}\nSenha: ${NC_PASS}\nPara configurar um domínio e HTTPS execute o scipt config_domain.sh" 20 70
+# Pergunta ao usuário se deseja configurar o HTTPS
+if (whiptail --title "Configuração de Domínio (Opcional)" --yesno "Deseja configurar o HTTPS (Domínio) agora?\n\nAVISO:\nEsta etapa é destinada a usuários que possuem um PROXY REVERSO (como Nginx, Traefik, Caddy, Cloudflare Tunnel, etc) já configurado.\n\nAo continuar, o acesso direto via HTTP (IP:PORTA) deixará de funcionar.\n\nDeseja continuar?" 15 70 3>&1 1>&2 2>&3); then
+    
+    # Se o usuário clicar em "Sim" (código de saída 0)
+    echo -e "${YELLOW}Iniciando configuração de HTTPS/Domínio...${NC}"
+    
+    # Executa o script de configuração de domínio
+    bash config_domain.sh
+    
+else
+    
+    # Se o usuário clicar em "Não" (código de saída 1)
+    echo -e "${GREEN}Configuração de HTTPS/Domínio ignorada.${NC}"
+    echo -e "A instalação básica foi concluída."
+    # Exibe mensagem interativa via SSH com whiptail
+    whiptail --title "Nextcloud está pronto!" \
+      --msgbox "O Nextcloud está funcional!\n\nAcesse pelo navegador:\n\nhttp://${IP_LOCAL}:${NEXTCLOUD_PORT}\nUsuário: ${NC_USER}\nSenha: ${NC_PASS}\nPara configurar um domínio e HTTPS execute o scipt config_domain.sh que está na pasta $CONTAINER_NAME" 20 70
+
+    exit 0
+fi

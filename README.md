@@ -1,6 +1,6 @@
 # 🚀 Nextcloud Docker Installer
 
-Instalação automatizada do Nextcloud com Docker e Docker Compose, incluindo banco de dados MariaDB, Redis, configuração regional, segurança e pós-instalação. Ideal para servidores Linux com interface SSH.
+Instalação automatizada do Nextcloud com Docker e Docker Compose, incluindo banco de dados MariaDB 10.6, Redis Alpine, configuração regional, segurança e pós-instalação. Ideal para servidores Linux com interface SSH.
 Otimizado para multiplas Instâncias
 
 ---
@@ -14,18 +14,19 @@ Otimizado para multiplas Instâncias
 - Verificação de porta e containers existentes
 - Pós-instalação com ajustes via occ
 - Script para configurar domínio e HTTPS
-- Geração automática de hash SHA256 via GitHub Actions
+- Organiza pastas de configurções pelo nome do container (Organização em multiplas instâncias)
 
 ---
 
 ## 🛠️ Requisitos
 
 - Linux com acesso `root`, `Debian/Ubuntu`
-- Docker e Docker Compose (instalados automaticamente se ausentes)
+- `Docker` e `Docker Compose` (instalados automaticamente se ausentes)
 - Partição para as pastas de usuários do nextcloud. Ex: /mnt/ncdata ou /ncdata
-- whiptail (instalado automaticamente)
+- `whiptail` (instalado automaticamente)
+- `curl` (instalado automaticamente)
 - Acesso à internet para baixar imagens e releases
-- Git para clonar o repositório
+- `Git` para clonar o repositório
 
 ---
 
@@ -40,7 +41,7 @@ sudo apt install git -y
 2. Use o comando para clonar e executar:
 
 ```bash
-git clone https://github.com/Dieguim25/Nextcloud-Docker-Scripts.git && cd Nextcloud-Docker-Scripts && chmod +x * && sudo ./install.sh
+git clone https://github.com/Dieguim25/Nextcloud-Docker-Scripts.git && cd Nextcloud-Docker-Scripts && bash install.sh
 ```
 
 Esse script baixa a última release, extrai os arquivos e inicia o processo de instalação.
@@ -56,14 +57,13 @@ Esse script baixa a última release, extrai os arquivos e inicia o processo de i
 4. Após a instalação, o post_install.sh será executado automaticamente para:
 
 - Ajustar configurações internas via occ
-- Definir idioma, timezone, domínio confiável
-- Renomear o arquivo .env com timestamp
+- Definir idioma, fuso horário, domínio confiável
 
 Aos instalar multiplas instâncias e no abrir na web e tentar fazer login retornar o seguinte erro:
 
 <img width="450" height="650" alt="image" src="https://github.com/user-attachments/assets/e2682545-187e-47a3-a793-9ed289881a86" />
 
-Apague tudo que tem a direita após a porta na ``Barra de Endereços``:
+Apague tudo que tem a direita após a porta na ``Barra de Endereços``, ou simplesmente pressione `ctrl`+`shift` e clique em `R`:
 
 <img width="426" height="47" alt="image" src="https://github.com/user-attachments/assets/542982c0-37c2-4e8a-bd00-f776869f2fa9" />
 
@@ -75,9 +75,11 @@ Agora deve funcionar. 😀
 
 ## 🌐 Configurar domínio e HTTPS
 
-⚠️ Importante: Para configurar HTTPS corretamente, é necessário que o Nextcloud esteja atrás de um proxy reverso (como Nginx, Traefik ou Cloudflare Tunnel) que gerencie os certificados SSL. Sem isso, o Nextcloud pode parar de funcionar ou apresentar erros de redirecionamento, falhas de login ou problemas com domínios confiáveis.
+⚠️ Importante: Para configurar HTTPS corretamente, é necessário que o Nextcloud esteja atrás de um proxy reverso (como Nginx, Traefik, Cloudflare Tunnel, etc...) que gerencie os certificados SSL. Sem isso, o Nextcloud pode parar de funcionar ou apresentar erros de redirecionamento, falhas de login ou problemas com domínios confiáveis. Após feita a configuração HTTPS a interface web não funcionara mais em HTTP.
 
-Após a instalação, execute:
+Para a configuração, execute:
+
+⚠️ Obs: deve ser executado da mesma pasta que contém os demais scripts, que é criada após a instalação.
 
 
 ```bash

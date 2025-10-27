@@ -20,7 +20,7 @@ Otimizado para multiplas Instâncias
 
 ## 🛠️ Requisitos
 
-- Linux com acesso `root`, `Debian/Ubuntu`
+- Linux com acesso `root`, `Debian 11+/Ubuntu 22+`
 - `Docker` e `Docker Compose` (instalados automaticamente se ausentes)
 - Partição para as pastas de usuários do nextcloud. Ex: /mnt/ncdata ou /ncdata
 - `whiptail` (instalado automaticamente)

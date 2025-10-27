@@ -1,46 +1,45 @@
 #!/bin/bash
 
-# Cores
+# Definição de Cores
 GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
 RED='\033[0;31m'
-NC='\033[0m'
+NC='\033[0m' # Sem Cor
 
-# Função para validar domínio (formato básico)
-validar_dominio() {
-  [[ "$1" =~ ^[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$ ]]
-}
-
-whiptail --title "⚠️ Atenção: HTTPS sem Proxy Reverso" \
---msgbox "Você está prestes a habilitar HTTPS.\n\n⚠️ Se o Nextcloud não estiver atrás de um proxy reverso (como Nginx, Traefik, Cloudflare Tunnel ou Caddy), isso pode causar falhas graves na aplicação, como:\n\n- Interface inacessível\n\nCertifique-se de que o proxy está corretamente configurado antes de prosseguir." 20 70
-
-# Loop até obter domínio válido e confirmado
-while true; do
-  DOMINIO=$(whiptail --inputbox "Digite o domínio que deseja usar (ex: cloud.seudominio.com):" 10 70 "" 3>&1 1>&2 2>&3)
-
-  # Cancelado
-  if [ $? -ne 0 ]; then
-    echo -e "${RED}❌ Operação cancelada pelo usuário.${NC}"
+# Se o .env não estiver aqui, encerra.
+if [ ! -f .env ]; then
+    echo -e "${RED}Erro: Arquivo .env não encontrado no diretório atual.${NC}"
+    echo "Execute este script de dentro da pasta de instalação."
     exit 1
-  fi
+fi
 
-  # Validação
-  if ! validar_dominio "$DOMINIO"; then
-    whiptail --msgbox "❌ Domínio inválido.\n\nUse um formato como: exemplo.com ou sub.exemplo.com" 10 70
-    continue
-  fi
+# 2. Carrega as variáveis (como $CONTAINER_NAME) do arquivo .env
+echo -e "${GREEN}Carregando configuração...${NC}"
+export $(grep -v '^#' .env | xargs)
 
-  # Confirmação
-  whiptail --yesno "Você digitou:\n\n$DOMINIO\n\nDeseja continuar com esse domínio?" 10 70
-  if [ $? -eq 0 ]; then
-    echo -e "${GREEN}✅ Domínio confirmado: $DOMINIO${NC}"
-    break
-  fi
-done
+# 3. Pergunta ao usuário qual é o domínio (usando whiptail)
+DOMINIO=$(whiptail --inputbox "Digite seu domínio/subdomínio para o Nextcloud:\n\nEx: nextcloud.meudominio.com" 10 70 3>&1 1>&2 2>&3)
 
-# Aplica configurações no Nextcloud
+if [ -z "$DOMINIO" ]; then
+    echo -e "${RED}❌ Domínio não fornecido. Configuração HTTPS cancelada.${NC}"
+    exit 1
+fi
+
+echo -e "${GREEN}Configurando domínio: $DOMINIO...${NC}"
+
+# --- FIM DA CORREÇÃO ---
+CONTAINER=${CONTAINER_NAME}-app
+# Captura o IP local
+IP_LOCAL=$(hostname -I | awk '{print $1}')
+NEXTCLOUD_PORT=${NEXTCLOUD_PORT}
+CONTAINER_IP=http://${IP_LOCAL}:${NEXTCLOUD_PORT}
+
+# Seus comandos (agora corretos, pois $CONTAINER_NAME e $DOMINIO existem)
 echo -e "${GREEN}🔧 Aplicando configurações no Nextcloud...${NC}"
-docker exec -u www-data nextcloud-app php occ config:system:set overwrite.cli.url --value="https://$DOMINIO"
-docker exec -u www-data nextcloud-app php occ config:system:set overwriteprotocol --value="https"
-docker exec -u www-data nextcloud-app php occ maintenance:update:htaccess
-docker restart nextcloud-app
-echo -e "${GREEN}✅ Configuração concluída!${NC}"
+docker exec -u www-data $CONTAINER php occ config:system:set overwrite.cli.url --value="https://$DOMINIO"
+docker exec -u www-data $CONTAINER php occ config:system:set overwriteprotocol --value="https"
+docker exec -u www-data $CONTAINER php occ maintenance:update:htaccess
+docker restart $CONTAINER
+
+echo -e "${GREEN}✅ Configuração de HTTPS concluída.${NC}"
+echo -e "${YELLOW}Lembre-se de apontar seu proxy reverso para o container em $CONTAINER_IP.${NC}"

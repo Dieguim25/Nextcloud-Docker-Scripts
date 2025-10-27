@@ -41,7 +41,7 @@ sudo apt install git -y
 2. Use o comando para clonar e executar:
 
 ```bash
-git clone https://github.com/Dieguim25/Nextcloud-Docker-Scripts.git && cd Nextcloud-Docker-Scripts && bash install.sh
+git clone https://github.com/Dieguim25/nextcloud-docker.git && cd nextcloud-docker && bash install.sh
 ```
 
 Esse script baixa a última release, extrai os arquivos e inicia o processo de instalação.

@@ -1,5 +1,13 @@
 #!/bin/bash
 
+# --- Início da Verificação de Root ---
+if [ "$UID" -ne 0 ]; then
+  echo "Erro: Este script precisa ser executado com privilégios de root." >&2
+  echo "Por favor, execute com 'sudo'." >&2
+  exit 1
+fi
+# --- Fim da Verificação de Root ---
+
 # Cores ANSI
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -9,15 +17,38 @@ NC='\033[0m' # Sem cor
 
 ZONEINFO="/usr/share/zoneinfo"
 
-# Verifica se o whiptail está instalado
-if ! command -v whiptail &> /dev/null; then
-  echo -e "${YELLOW}🔍 Whiptail não encontrado. Instalando automaticamente...${NC}"
-  sudo apt update && sudo apt install -y whiptail
-  if ! command -v whiptail &> /dev/null; then
-    echo -e "${RED}❌ Falha ao instalar o whiptail. Encerrando.${NC}"
-    exit 1
-  fi
+# --- Verifica dependências (whiptail e curl) ---
+pacotes_necessarios="whiptail curl"
+pacotes_faltando=""
+
+echo -e "${YELLOW}Verificando dependências...${NC}"
+
+for pkg in $pacotes_necessarios; do
+    if ! command -v "$pkg" &> /dev/null; then
+        # Adiciona o pacote à lista de pacotes faltando
+        pacotes_faltando="$pacotes_faltando $pkg"
+    fi
+done
+
+# Se a lista de pacotes faltando não estiver vazia, instala
+if [ -n "$pacotes_faltando" ]; then
+    echo -e "${YELLOW}🔍 Pacotes não encontrados:$pacotes_faltando. Instalando automaticamente...${NC}"
+    
+    # Roda o apt update e o install
+    apt update && apt install -y $pacotes_faltando
+    
+    # Re-verifica apenas os pacotes que deveriam ter sido instalados
+    for pkg in $pacotes_faltando; do
+        if ! command -v "$pkg" &> /dev/null; then
+            echo -e "${RED}❌ Falha ao instalar o pacote '$pkg'. Encerrando.${NC}"
+            exit 1
+        fi
+    done
+    echo -e "${GREEN}✅ Dependências instaladas com sucesso.${NC}"
+else
+    echo -e "${GREEN}✅ Dependências (whiptail, curl) já estão instaladas.${NC}"
 fi
+# --- Fim da verificação ---
 
 # Função para instalar o docker
 install_docker() {
@@ -25,8 +56,8 @@ install_docker() {
   curl -fsSL https://get.docker.com | sh
 
   echo -e "${YELLOW}⚙️ Habilitando e iniciando o serviço Docker...${NC}"
-  sudo systemctl enable docker
-  sudo systemctl start docker
+   systemctl enable docker
+   systemctl start docker
 
   echo -e "${GREEN}✅ Docker instalado com sucesso!${NC}"
 }
@@ -43,7 +74,7 @@ fi
 if ! docker compose version &> /dev/null; then
   echo -e "${RED}❌ Docker Compose não encontrado.${NC}"
   echo -e "${YELLOW}⚙️ Instalando Docker Compose plugin...${NC}"
-  sudo apt-get update -y && sudo apt-get install -y docker-compose-plugin
+   apt-get update -y &&  apt-get install -y docker-compose-plugin
   echo -e "${GREEN}✅ Docker Compose instalado com sucesso!${NC}"
 else
   echo -e "${GREEN}✔ Docker Compose já está instalado.${NC}"
@@ -98,44 +129,68 @@ if [ -z "$CONTAINER_NAME" ] || ! check_container_name "$CONTAINER_NAME"; then
 else
   echo -e "${GREEN}✅ O nome '$CONTAINER_NAME' foi aceito.${NC}"
 fi
+
+echo -e "${YELLOW}Criando diretório de configuração: ./${CONTAINER_NAME}${NC}"
+mkdir -p "$CONTAINER_NAME"
+if [ $? -ne 0 ]; then
+    echo -e "${RED}❌ Falha ao criar o diretório ./${CONTAINER_NAME}. Verifique as permissões.${NC}"
+    exit 1
+fi
+echo -e "${GREEN}✅ Diretório criado com sucesso.${NC}",
+
+#Copia os arquivos para a pasta com nome do container
+\cp docker-compose.yml $CONTAINER_NAME/docker-compose.yml
+\cp post_install.sh $CONTAINER_NAME/post_install.sh
+\cp config_domain.sh $CONTAINER_NAME/config_domain.sh
+
 # Lista de regiões principais
 REGIOES=$(find "$ZONEINFO" -mindepth 1 -maxdepth 1 -type d | xargs -n1 basename)
 
-# Escolher região
+# Loop mestre para seleção de Região e Cidade
 while true; do
-  REGIAO_ESCOLHIDA=$(whiptail --title "Escolha a Região" \
-    --menu "Selecione uma região:" 20 60 10 $(for r in $REGIOES; do echo "$r ''"; done | sort) 3>&1 1>&2 2>&3)
 
-  if [ $? -eq 0 ] && [ -n "$REGIAO_ESCOLHIDA" ]; then
+    # --- 1. Escolher Região ---
+    REGIAO_ESCOLHIDA=$(whiptail --title "Escolha a Região" \
+        --menu "Selecione uma região:" 20 60 10 $(for r in $REGIOES; do echo "$r ''"; done | sort) 3>&1 1>&2 2>&3)
+
+    if [ $? -ne 0 ]; then
+        # Se o usuário cancelar na SELEÇÃO DE REGIÃO, insiste (com base na sua lógica original)
+        whiptail --msgbox "❌ Você precisa escolher uma região para continuar." 8 60
+        continue # Volta ao início do loop mestre (mostra Região novamente)
+    fi
+
     echo -e "${GREEN}✅ Região selecionada: $REGIAO_ESCOLHIDA${NC}"
-    break
-  else
-    whiptail --msgbox "❌ Você precisa escolher uma região para continuar." 8 60
-  fi
-done
 
 
-# Lista cidades da região escolhida
-CIDADES=$(find "$ZONEINFO/$REGIAO_ESCOLHIDA" -type f | sed "s|$ZONEINFO/$REGIAO_ESCOLHIDA/||" | sort)
+    # --- 2. Escolher Cidade (Baseado na Região) ---
 
-# Monta menu de cidades com uma linha por item
-OPCOES=""
-for c in $CIDADES; do
-  OPCOES="$OPCOES $c ''"
-done
+    # Lista cidades da região escolhida
+    CIDADES=$(find "$ZONEINFO/$REGIAO_ESCOLHIDA" -type f | sed "s|$ZONEINFO/$REGIAO_ESCOLHIDA/||" | sort)
 
-# Escolher cidade/fuso horário
-while true; do
-  CIDADE_ESCOLHIDA=$(whiptail --title "Escolha a Cidade" \
-    --menu "Selecione o fuso horário:" 20 60 15 $(echo "$OPCOES" | sort) 3>&1 1>&2 2>&3)
+    # Monta menu de cidades com uma linha por item
+    OPCOES=""
+    for c in $CIDADES; do
+        OPCOES="$OPCOES $c ''"
+    done
 
-  if [ $? -eq 0 ] && [ -n "$CIDADE_ESCOLHIDA" ]; then
+    # Escolher cidade/fuso horário
+    CIDADE_ESCOLHIDA=$(whiptail --title "Escolha a Cidade" \
+        --menu "Selecione o fuso horário (Pressione 'Cancelar' para voltar à Região):" 20 60 15 $(echo "$OPCOES" | sort) 3>&1 1>&2 2>&3)
+
+    if [ $? -ne 0 ]; then
+        # Se o usuário cancelar na SELEÇÃO DE CIDADE, volta para a Região
+        echo -e "${YELLOW}Voltando para a seleção de Região...${NC}"
+        continue # Volta ao início do loop mestre (mostra Região novamente)
+    fi
+
+    # Se chegou aqui, o usuário selecionou Região E Cidade
     echo -e "${GREEN}✅ Cidade selecionada: $CIDADE_ESCOLHIDA${NC}"
-    break
-  else
-    whiptail --msgbox "❌ Você precisa escolher uma cidade para continuar." 8 60
-  fi
+    break # Sai do loop mestre
+
 done
+
+# O script continua aqui com as variáveis $REGIAO_ESCOLHIDA e $CIDADE_ESCOLHIDA definidas
+echo "Fuso horário final selecionado: $REGIAO_ESCOLHIDA/$CIDADE_ESCOLHIDA"
 
 
 # Define variáveis
@@ -173,7 +228,7 @@ case "$REGIAO_ESCOLHIDA" in
 esac
 
 # Aplica timezone
-sudo timedatectl set-timezone "$TZ"
+ timedatectl set-timezone "$TZ"
 
 # Exibe resultado
 echo -e "✅ ${CYAN}Timezone definido para:${GREEN} $TZ${NC}\n📞 ${CYAN}Código de país definido:${NC}${GREEN} $LOCAL${NC}"
@@ -357,11 +412,9 @@ REDIS_PASSWORD=$(openssl rand -base64 16)
 DB_USER="nc_$(tr -dc 'a-z0-9' </dev/urandom | head -c6)"
 DB_NAME="${CONTAINER_NAME}_db"
 
-# Ajusta o script de configuração do dominio config_domain.sh
-sed -i "s/nextcloud-app/${CONTAINER_NAME}-app/g" config_domain.sh
 
-# Cria o arquivo .env
-cat <<EOF > .env
+# Cria o arquivo .env dentro do diretório $CONTAINER_NAME
+cat <<EOF > "$CONTAINER_NAME/.env"
 CONTAINER_NAME=$CONTAINER_NAME
 DB_ROOT_PASSWORD=$DB_ROOT_PASSWORD
 DB_PASSWORD=$DB_PASSWORD
@@ -371,6 +424,7 @@ DB_NAME=$DB_NAME
 NC_DATA=$FINAL_PATH
 NC_USER=$NC_USER
 NC_PASS=$NC_PASS
+CONTAINER_NAME=$CONTAINER_NAME
 TZ=$TZ
 LOCAL=$LOCAL
 NEXTCLOUD_PORT=$NEXTCLOUD_PORT
@@ -384,6 +438,7 @@ echo -e "${YELLOW}REDIS_PASSWORD=${NC}${GREEN} $REDIS_PASSWORD${NC}"
 echo -e "${YELLOW}DB_USER=${NC}${GREEN} $DB_USER${NC}"
 echo -e "${YELLOW}DB_NAME=${NC}${GREEN} $DB_NAME${NC}"
 echo -e "${YELLOW}Pasta para os dados de usuários do Nextcloud=${NC}${GREEN}$FINAL_PATH${NC}"
+echo -e "${YELLOW}Nome do container=${NC} ${GREEN}$CONATINER_NAME${NC}"
 echo -e "${YELLOW}Usuário Administrador=${NC}${GREEN} $NC_USER${NC}"
 echo -e "${YELLOW}Senha de Administrador=${NC} ${GREEN}$NC_PASS${NC}"
 echo -e "${YELLOW}Fuso horário=${NC}${GREEN} $TZ${NC}"
@@ -398,7 +453,7 @@ done
 echo -e "${NC}\n"
 
 
-docker compose -p "${CONTAINER_NAME}" up -d
+cd $CONTAINER_NAME && docker compose -p "${CONTAINER_NAME}" up -d
 
 # Captura IP local do servidor
 IP_LOCAL=$(hostname -I | awk '{print $1}')
@@ -438,10 +493,10 @@ echo -ne "\033[K" # Limpa a linha
 
 # Ajusta permissões da pasta de dados
 echo -e "${CYAN} Ajustando as permissões da pasta: $FINAL_PATH${NC}"
-sudo chown -R 33:33 "$FINAL_PATH"
-sudo chmod -R 750 "$FINAL_PATH"
+chown -R 33:33 "$FINAL_PATH"
+ chmod -R 750 "$FINAL_PATH"
 echo -e "${GREEN} ✅ Ajustado${NC}"
 
 echo -e "${CYAN}Iniciando script de configurações pós instalação${NC}"
 sleep 3
-bash ./post_install.sh
+bash post_install.sh

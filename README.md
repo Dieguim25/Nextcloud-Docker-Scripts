@@ -32,10 +32,12 @@ Otimizado para multiplas Instâncias
 
 ## 📥 Instalação
 
+⚠️ Importante:Antes de executar entre como root
+
 1. Instalar o Git se não tiver instalado:
 
 ```bash
-sudo apt install git -y
+apt install git -y
 ```
 
 2. Use o comando para clonar e executar:

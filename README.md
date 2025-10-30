@@ -92,7 +92,6 @@ Esse script solicitará o domínio desejado e aplicará as configurações no Ne
 
 - Senhas geradas com openssl rand
 - Validação de complexidade de senha
-- Backup automático do .env (será salvo com .env+o nome do container e a data/hora. Ex: .env_nextcloud_20251024-230132)
 - Permissões ajustadas na pasta de dados
 
 

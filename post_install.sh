@@ -75,13 +75,23 @@ esac
 
 echo -e "${GREEN}✅ LOCAL=$LOCAL | TZ=$TZ | IP_LOCAL=$IP_LOCAL | default_language=$DEFAULT_LANG${NC}"
 
-# Aplicando configurações
+# 1. Configurações de Banco de Dados e Manutenção
 executar_occ "Corrigindo banco de dados" db:add-missing-indices
 executar_occ "Executando manutenção" maintenance:repair --include-expensive
+
+# 2. Configurações de Cache e Redis
+executar_occ "Definindo memcache.local para Redis" config:system:set memcache.local --value '\OC\Memcache\Redis'
+executar_occ "Definindo memcache.locking para Redis" config:system:set memcache.locking --value '\OC\Memcache\Redis'
+executar_occ "Definindo Redis dbindex" config:system:set redis dbindex --value 0 --type integer
+executar_occ "Definindo Redis timeout" config:system:set redis timeout --value 0.5 --type float
+
+# 3. Configurações Regionais e de Manutenção
 executar_occ "Definindo região de telefone" config:system:set default_phone_region --value="$LOCAL"
 executar_occ "Definindo fuso horário" config:system:set default_timezone --value="$TZ"
 executar_occ "Definindo idioma padrão com base no fuso horário" config:system:set default_language --value="$DEFAULT_LANG"
 executar_occ "Definindo início da janela de manutenção" config:system:set maintenance_window_start --value="7"
+
+# 4. Configurações de Segurança e Apps
 executar_occ "Adicionando IP local aos domínios confiáveis" config:system:set trusted_domains 2 --value="$IP_LOCAL"
 executar_occ "Desativando app_api" app:disable app_api
 

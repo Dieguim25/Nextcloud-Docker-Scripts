@@ -32,7 +32,7 @@ Otimizado para multiplas Instâncias
 
 ## 📥 Instalação
 
-⚠️ Importante:Antes de executar entre como root
+⚠️ Importante: Antes de executar entre como root
 
 1. Instalar o Git se não tiver instalado:
 

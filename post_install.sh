@@ -18,6 +18,7 @@ NC='\033[0m' # Sem cor
 CONFIG_PATH="/var/www/html/config/config.php"
 ENV_FILE=".env"
 
+
 # Se o .env não estiver aqui, encerra.
 if [ ! -f .env ]; then
     echo -e "${RED}Erro: Arquivo .env não encontrado no diretório atual.${NC}"
@@ -29,6 +30,9 @@ fi
 echo -e "${GREEN}Carregando configuração...${NC}"
 export $(grep -v '^#' .env | xargs)
 
+APP_CONTAINER="${CONTAINER_NAME}-app"
+
+
 # Captura o IP local
 IP_LOCAL=$(hostname -I | awk '{print $1}')
 
@@ -37,7 +41,7 @@ executar_occ() {
   local descricao="$1"
   shift
   echo -e "${YELLOW}🔧 $descricao...${NC}"
-  if docker exec -u www-data "${CONTAINER_NAME}-app" php occ "$@"; then
+  if docker exec -u www-data "$APP_CONTAINER" php occ "$@"; then
     echo -e "${GREEN}✅ $descricao concluído com sucesso.${NC}"
   else
     echo -e "${RED}❌ Falha ao executar: $descricao${NC}"
@@ -79,12 +83,6 @@ echo -e "${GREEN}✅ LOCAL=$LOCAL | TZ=$TZ | IP_LOCAL=$IP_LOCAL | default_langua
 executar_occ "Corrigindo banco de dados" db:add-missing-indices
 executar_occ "Executando manutenção" maintenance:repair --include-expensive
 
-# 2. Configurações de Cache e Redis
-executar_occ "Definindo memcache.local para Redis" config:system:set memcache.local --value '\OC\Memcache\Redis'
-executar_occ "Definindo memcache.locking para Redis" config:system:set memcache.locking --value '\OC\Memcache\Redis'
-executar_occ "Definindo Redis dbindex" config:system:set redis dbindex --value 0 --type integer
-executar_occ "Definindo Redis timeout" config:system:set redis timeout --value 0.5 --type float
-
 # 3. Configurações Regionais e de Manutenção
 executar_occ "Definindo região de telefone" config:system:set default_phone_region --value="$LOCAL"
 executar_occ "Definindo fuso horário" config:system:set default_timezone --value="$TZ"
@@ -95,13 +93,12 @@ executar_occ "Definindo início da janela de manutenção" config:system:set mai
 executar_occ "Adicionando IP local aos domínios confiáveis" config:system:set trusted_domains 2 --value="$IP_LOCAL"
 executar_occ "Desativando app_api" app:disable app_api
 
+# 2. Configurações de Cache e Redis
+executar_occ "Definindo memcache.local para Redis" config:system:set memcache.local --value '\OC\Memcache\Redis'
+executar_occ "Definindo memcache.locking para Redis" config:system:set memcache.locking --value '\OC\Memcache\Redis'
 
 echo -e "${CYAN}Informações de credenciais podem ser encontradas no arquivo $NOVO_ENV${NC}"
 sleep 3
-
-# Define o nome completo do container para reinício
-APP_CONTAINER="${CONTAINER_NAME}-app"
-
 
 echo -e "${YELLOW}🔄 Reiniciando o container '$APP_CONTAINER' para aplicar as configurações...${NC}"
 docker restart "$APP_CONTAINER"

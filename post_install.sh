@@ -94,10 +94,10 @@ executar_occ "Adicionando IP local aos domínios confiáveis" config:system:set 
 executar_occ "Desativando app_api" app:disable app_api
 
 # 2. Configurações de Cache e Redis
-executar_occ "Definindo memcache.local para Redis" config:system:set memcache.local --value '\OC\Memcache\Redis'
+executar_occ "habilitando bloqueio de arquivo" config:system:set filelocking.enabled --value='true'
 executar_occ "Definindo memcache.locking para Redis" config:system:set memcache.locking --value '\OC\Memcache\Redis'
 
-echo -e "${CYAN}Informações de credenciais podem ser encontradas no arquivo $NOVO_ENV${NC}"
+echo -e "${CYAN}As informações de credenciais podem ser encontradas na pasta ${NC}${GREEN}${CONTAINER_NAME}/.env"
 sleep 3
 
 echo -e "${YELLOW}🔄 Reiniciando o container '$APP_CONTAINER' para aplicar as configurações...${NC}"
